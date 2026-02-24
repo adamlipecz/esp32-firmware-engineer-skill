@@ -5,7 +5,7 @@ An agent skill for ESP32/ESP-IDF firmware engineering. Works with any agent that
 ## Install
 
 ```bash
-npx skills add adamlipecz/esp32-firmware-engineer-skill
+npx skills add adamlipecz/esp32-firmware-engineer-skill --skill esp32-firmware-engineer
 ```
 
 ## What This Is
