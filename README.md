@@ -1,20 +1,24 @@
-# ESP32 Embedded Engineer Skill (Codex)
+# esp32-firmware-engineer
 
-This repository contains an ESP32/ESP-IDF-focused Codex skill.
+An agent skill for ESP32/ESP-IDF firmware engineering. Works with any agent that supports the [skills.sh](https://skills.sh) format — Claude Code, Codex, and others.
 
-It is a public, human-facing repo that explains what the skill is and what it does. The actual agent instructions live in `SKILL.md`.
+## Install
+
+```bash
+npx skills add adamlipecz/esp32-firmware-engineer-skill
+```
 
 ## What This Is
 
-- A Codex skill for ESP32 firmware engineering (ESP-IDF)
+- A skill for ESP32 firmware engineering (ESP-IDF)
 - Focused on correctness, debugging, bring-up, review quality, and reproducible workflows
-- Encodes strict rules for hardware context, exact ESP32 variant identification, partitioning, `sdkconfig`, and build validation
+- Encodes strict rules for hardware context, exact ESP32 variant identification, OTA, security hardening, LVGL integration, partitioning, `sdkconfig`, and build validation
 
 ## Key Behaviors the Skill Enforces
 
 - Do not proceed on hardware-facing tasks without clear hardware context
 - Do not proceed without exact ESP32 variant
-- Require concrete framework compatibility evidence (ESP-IDF / ESP-ADF / ESP-SR, etc.) before build/debug
+- Require concrete framework compatibility evidence (ESP-IDF / ESP-ADF / ESP-SR, LVGL, etc.) before build/debug
 - Prefer reproducible config changes (`sdkconfig` / partition CSV) over ad hoc menu navigation
 - Run build wrappers and validate before claiming completion
 - Add a service terminal proactively when USB/serial is free and policy allows it
@@ -22,24 +26,23 @@ It is a public, human-facing repo that explains what the skill is and what it do
 
 ## Repo Structure
 
-- `SKILL.md`: machine-facing skill instructions and routing
-- `agents/openai.yaml`: UI metadata for the skill
-- `references/`: topic-specific guidance (RTOS, memory, power, partitions, logging, display, compatibility, etc.)
-- `scripts/`: reusable wrapper scripts and compatibility preflight tooling
-- `assets/templates/`: reusable templates (console, component skeletons, partitions, shell snippets, compatibility lock example)
-- `examples/`: reference material used during development of the skill
-
-## Generated / Local Files
-
-- `build/plugin-compatibility-evidence.txt` is a generated preflight report (safe to delete; regenerated as needed)
-- `validate.sh` is a local helper that runs the `skill-creator` validator in a Python virtualenv
+- `SKILL.md` — agent-facing skill instructions and routing
+- `agents/openai.yaml` — UI metadata for OpenAI-compatible agents
+- `agents/claude.yaml` — UI metadata for Claude Code
+- `references/` — topic-specific guidance:
+  - RTOS patterns, communication protocols, memory optimization, power optimization
+  - Microcontroller programming, partitions & sdkconfig, logging & observability
+  - Display & graphics, LVGL integration, device terminal console
+  - OTA workflow, security hardening
+  - Dependency compatibility, toolchain & shell setup, panic log triage
+  - ESP-IDF checklists, engineering values
+- `scripts/` — reusable wrapper scripts (`build.sh`, `flash.sh`, `monitor.sh`, etc.) and compatibility preflight tooling
+- `assets/templates/` — reusable templates (console, component skeletons, partitions, shell snippets, compatibility lock example)
 
 ## Validation
 
-Typical local checks used for this repo:
-
 ```bash
-bash ./validate.sh .
 bash -n scripts/*.sh
 python3 -m py_compile scripts/check_plugin_compatibility.py
 git diff --check
+```

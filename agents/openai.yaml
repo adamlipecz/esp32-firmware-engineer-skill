@@ -39,6 +39,6 @@ interface:
     - Board pinmap and hardware constraints
     - Relevant sdkconfig settings and flash size
   default_prompt: |
-    Use $esp32-firmware-engineer to implement, review, or debug this ESP-IDF task.
+    Use the esp32-firmware-engineer skill to implement, review, or debug this ESP-IDF task.
     Block on missing context: require exact ESP32 variant, ESP-IDF version, and hardware
     details (pin map, peripheral list, flash size) before proceeding with hardware-integrated work.
