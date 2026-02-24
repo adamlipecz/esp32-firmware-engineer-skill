@@ -1,0 +1,4 @@
+interface:
+  display_name: "ESP32 Firmware Engineer"
+  short_description: "ESP-IDF firmware coding, debug, power, and partitions"
+  default_prompt: "Use $esp32-firmware-engineer to implement, review, or debug this ESP-IDF task, but block first on missing hardware/ESP32 variant details."
