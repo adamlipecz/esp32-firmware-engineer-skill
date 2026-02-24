@@ -34,7 +34,7 @@ Act as a senior ESP-IDF firmware engineer focused on correctness, debuggability,
 - Identify board wiring constraints: pin map, pull-ups, transceivers, level shifting, power rails, and boot/strapping pin usage.
 - Identify whether PSRAM, OTA, Wi-Fi, BLE, or deep sleep is in scope because they change memory/power/debug assumptions.
 - Identify all external ESP frameworks/components in use (for example ESP-ADF, ESP-SR, ESP-SKAINET, LVGL, custom managed components) and their exact versions/tags.
-- Identify display/controller details (interface, color depth/pixel format, byte order, frame buffer model) before writing graphics paths.
+- Identify display/controller details (interface, color depth/pixel format, byte order, frame buffer model, and LVGL version) before writing graphics paths.
 - Identify flash size/speed mode and PSRAM availability/mode when performance or memory placement matters.
 - Identify whether a USB/serial console path is available and unused by product features (USB CDC, USB-Serial-JTAG, or external USB-UART) and whether security policy allows an on-device service terminal.
 
@@ -133,6 +133,9 @@ Act as a senior ESP-IDF firmware engineer focused on correctness, debuggability,
 - Read `references/device-terminal-console.md` for ESP-IDF on-device terminal design, autocomplete, and runtime diagnostics commands.
 - Read `references/toolchain-and-shell-setup.md` for ESP-IDF install preflight checks and shell UX snippets (`.zshrc`, `.bashrc`).
 - Read `references/dependency-compatibility.md` for version compatibility evidence rules and ESP-IDF/ESP-ADF/ESP-SR validation workflow.
+- Read `references/ota-workflow.md` for OTA partition layouts, `esp_ota_ops` API flow, HTTPS OTA, rollback, anti-rollback counter, and OTA failure modes.
+- Read `references/security-hardening.md` for Secure Boot v2, flash encryption, NVS encryption, JTAG/UART disable, service terminal hardening, and the production security checklist.
+- Read `references/lvgl-display.md` for LVGL version compatibility, flush callback patterns (v8 vs v9), tick source setup, thread-safety mutex pattern, color format/byte order, memory allocation for DMA and PSRAM, and common display pitfalls.
 
 ## Use Bundled Templates
 
@@ -155,3 +158,8 @@ Act as a senior ESP-IDF firmware engineer focused on correctness, debuggability,
 - "My ESP32 display colors are wrong; verify pixel format/endianness and bus config"
 - "Add a friendly serial/USB terminal with settings commands and RTOS debug info"
 - "This project uses ESP-ADF and ESP-SR; prove the exact ESP-IDF version is compatible before building"
+- "Design an OTA update flow with rollback and anti-rollback for a field device"
+- "Harden this ESP32 project for production: secure boot, flash encryption, disable JTAG"
+- "Integrate LVGL v9 with an ST7789 display on ESP32-S3 via SPI with DMA"
+- "My ESP32 display colors are wrong after switching LVGL versions"
+- "ESP32 won't enter deep sleep / exits sleep immediately after wakeup stub"

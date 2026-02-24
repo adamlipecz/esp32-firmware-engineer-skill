@@ -143,17 +143,20 @@ ensure_target() {
 
 detect_port() {
   if [ -n "${PORT:-}" ]; then
+    if [ ! -e "$PORT" ]; then
+      log "WARNING: PORT=${PORT} does not exist. Check device connection and path."
+    fi
     printf '%s\n' "$PORT"
     return 0
   fi
 
   local os
   os=$(os_name)
-  local candidates=()
+  local globs=()
 
   case "$os" in
     Darwin)
-      candidates=(
+      globs=(
         /dev/cu.usbmodem*
         /dev/cu.usbserial*
         /dev/cu.SLAB_USBtoUART*
@@ -161,29 +164,46 @@ detect_port() {
       )
       ;;
     Linux)
-      candidates=(
+      globs=(
         /dev/serial/by-id/*
         /dev/ttyACM*
         /dev/ttyUSB*
       )
       ;;
     *)
-      candidates=(/dev/ttyACM* /dev/ttyUSB* /dev/cu.usbmodem* /dev/cu.usbserial*)
+      globs=(/dev/ttyACM* /dev/ttyUSB* /dev/cu.usbmodem* /dev/cu.usbserial*)
       ;;
   esac
 
-  local c
-  for c in "${candidates[@]}"; do
+  local found=()
+  local g expanded
+  for g in "${globs[@]}"; do
     # shellcheck disable=SC2086
-    for expanded in $c; do
+    for expanded in $g; do
       if [ -e "$expanded" ]; then
-        printf '%s\n' "$expanded"
-        return 0
+        found+=("$expanded")
       fi
     done
   done
 
-  log "ERROR: Could not auto-detect serial port. Set PORT=/dev/ttyUSB0 (Linux) or PORT=/dev/cu.usbmodemXXXX (macOS)."
+  if [ "${#found[@]}" -eq 0 ]; then
+    log "ERROR: No serial port detected. Connect the device and try again."
+    log "       Set PORT=/dev/ttyUSB0 (Linux) or PORT=/dev/cu.usbmodemXXXX (macOS) to override."
+    return 1
+  fi
+
+  if [ "${#found[@]}" -eq 1 ]; then
+    log "Auto-detected port: ${found[0]}"
+    printf '%s\n' "${found[0]}"
+    return 0
+  fi
+
+  log "ERROR: Multiple serial ports detected. Set PORT=<device> to choose one:"
+  local p
+  for p in "${found[@]}"; do
+    log "  $p"
+  done
+  log "Example: PORT=${found[0]} ./scripts/flash.sh"
   return 1
 }
 

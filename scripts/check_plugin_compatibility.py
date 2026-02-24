@@ -14,6 +14,8 @@ import os
 import re
 import subprocess
 import sys
+import urllib.request
+import urllib.error
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
@@ -133,20 +135,41 @@ def resolve_repo(candidates: Iterable[str]) -> Path | None:
     return None
 
 
-def adf_check(idf_ver: tuple[int, int, int], adf_dir: Path) -> CheckResult:
-    details: list[str] = []
-    describe = git_describe(adf_dir)
-    details.append(f"ESP-ADF git describe: {describe}")
+_ADF_README_URLS = [
+    # master branch README is always current; also try the stable branch tag if known
+    "https://raw.githubusercontent.com/espressif/esp-adf/master/README.md",
+]
+_ADF_FETCH_TIMEOUT = 10  # seconds
 
-    readme = adf_dir / "README.md"
-    if not readme.exists():
-        return CheckResult(False, "ESP-ADF README.md not found (no matrix evidence)", details)
-    text = readme.read_text(errors="ignore")
+
+def fetch_adf_readme_online(details: list[str]) -> str | None:
+    """Fetch the ESP-ADF README.md from GitHub. Returns text or None on failure."""
+    for url in _ADF_README_URLS:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "esp-idf-compat-checker/1.0"})
+            with urllib.request.urlopen(req, timeout=_ADF_FETCH_TIMEOUT) as resp:
+                text = resp.read().decode("utf-8", errors="ignore")
+            details.append(f"Fetched ESP-ADF README from {url}")
+            return text
+        except urllib.error.URLError as exc:
+            details.append(f"Could not fetch ADF README from {url}: {exc}")
+        except Exception as exc:
+            details.append(f"Unexpected error fetching ADF README: {exc}")
+    return None
+
+
+def _parse_adf_matrix(
+    text: str,
+    idf_ver: tuple[int, int, int],
+    adf_version_hint: str,
+    details: list[str],
+) -> CheckResult:
+    """Parse the ADF compatibility matrix table from README text."""
     lines = text.splitlines()
 
     header_line = next((ln for ln in lines if ln.startswith("|                       | ESP-IDF")), None)
     if not header_line:
-        return CheckResult(False, "ESP-ADF compatibility table header not found in README.md", details)
+        return CheckResult(False, "ESP-ADF compatibility table header not found in README", details)
 
     idf_minor = f"{idf_ver[0]}.{idf_ver[1]}"
     header_cells = [c.strip() for c in header_line.strip().strip("|").split("|")]
@@ -159,21 +182,20 @@ def adf_check(idf_ver: tuple[int, int, int], adf_dir: Path) -> CheckResult:
         details.append(f"ADF README matrix header: {header_line}")
         return CheckResult(
             False,
-            f"ESP-ADF README matrix does not explicitly list ESP-IDF v{idf_minor}",
+            f"ESP-ADF README matrix does not list ESP-IDF v{idf_minor} — version may be too new or old",
             details,
         )
 
-    adf_tag = describe.split("-")[0]  # v2.7 from v2.7-... if needed
     row_key = None
-    m_rel = re.match(r"v(\d+\.\d+)", adf_tag)
+    m_rel = re.match(r"v(\d+\.\d+)", adf_version_hint.split("-")[0])
     if m_rel:
         row_key = f"ESP-ADF <br> Release/v{m_rel.group(1)}"
-    elif "master" in describe.lower():
+    elif "master" in adf_version_hint.lower():
         row_key = "ESP-ADF <br> Master"
 
     if not row_key:
-        details.append("Unable to map ESP-ADF version to README matrix row (non-release/non-master checkout).")
-        return CheckResult(False, "Cannot map ESP-ADF checkout to matrix row; need explicit compatibility evidence", details)
+        details.append(f"ADF version hint: {adf_version_hint}")
+        return CheckResult(False, "Cannot map ESP-ADF version to matrix row; need explicit compatibility evidence", details)
 
     row_line = next((ln for ln in lines if row_key in ln), None)
     if not row_line:
@@ -188,11 +210,52 @@ def adf_check(idf_ver: tuple[int, int, int], adf_dir: Path) -> CheckResult:
     cell = row_cells[col_index]
     details.append(f"ADF matrix row: {row_line}")
     details.append(f"ADF matrix cell for ESP-IDF v{idf_minor}: {cell}")
-    if "yes-checkm" in cell or '"supported"' in cell and "no-icon" not in cell:
+    if "yes-checkm" in cell or ('"supported"' in cell and "no-icon" not in cell):
         return CheckResult(True, f"ESP-ADF matrix explicitly supports ESP-IDF v{idf_minor}", details)
     if "no-icon" in cell or "not supported" in cell:
         return CheckResult(False, f"ESP-ADF matrix marks ESP-IDF v{idf_minor} as not supported", details)
     return CheckResult(False, "ESP-ADF matrix cell is ambiguous; need explicit evidence", details)
+
+
+def adf_check(idf_ver: tuple[int, int, int], adf_dir: Path | None) -> CheckResult:
+    details: list[str] = []
+
+    # Determine ADF version string (from local clone or env hint)
+    adf_version_hint = os.getenv("ESP_ADF_VERSION", "").strip()
+    if adf_dir is not None:
+        try:
+            adf_version_hint = git_describe(adf_dir)
+            details.append(f"ESP-ADF git describe: {adf_version_hint}")
+        except Exception as exc:
+            details.append(f"git describe failed for ESP-ADF: {exc}")
+
+    if not adf_version_hint:
+        return CheckResult(
+            False,
+            "ESP-ADF version unknown. Set ESP_ADF_VERSION=v2.7 or provide a local ADF clone.",
+            details,
+        )
+
+    # Try local README first
+    if adf_dir is not None:
+        readme = adf_dir / "README.md"
+        if readme.exists():
+            details.append(f"Using local ESP-ADF README: {readme}")
+            text = readme.read_text(errors="ignore")
+            return _parse_adf_matrix(text, idf_ver, adf_version_hint, details)
+        details.append(f"Local ESP-ADF README not found at {readme}; trying online source")
+
+    # Fall back to fetching from GitHub
+    details.append("No local ESP-ADF clone available; fetching compatibility matrix from GitHub")
+    text = fetch_adf_readme_online(details)
+    if text is None:
+        return CheckResult(
+            False,
+            "Could not retrieve ESP-ADF compatibility matrix (no local clone, network unavailable). "
+            "Set ESP_ADF_DIR or ADF_PATH, or set ESP_ADF_VERSION and provide ESP_STACK_COMPAT_EVIDENCE.",
+            details,
+        )
+    return _parse_adf_matrix(text, idf_ver, adf_version_hint, details)
 
 
 def sr_check(idf_ver: tuple[int, int, int], sr_dir: Path) -> CheckResult:
@@ -297,20 +360,22 @@ def main() -> int:
         adf_dir = resolve_repo(
             [os.getenv("ESP_ADF_DIR", ""), os.getenv("ADF_PATH", ""), str(Path.home() / "esp/esp-adf")]
         )
-        if not adf_dir:
-            report.append("[FAIL] esp-adf is used but ESP_ADF_DIR/ADF_PATH/local repo was not found")
-            failures += 1
-        else:
+        if adf_dir:
             report.append(f"esp-adf-dir={adf_dir}")
-            res = adf_check(idf_ver, adf_dir)
+        else:
+            report.append("esp-adf-dir=none (will attempt online compatibility check)")
+        res = adf_check(idf_ver, adf_dir)
+        if adf_dir:
             try:
                 versions["esp-adf"] = git_describe(adf_dir)
             except Exception:
-                versions["esp-adf"] = ""
-            report.extend([f"  {d}" for d in res.details])
-            report.append(("[OK] " if res.ok else "[FAIL] ") + res.summary)
-            if not res.ok:
-                failures += 1
+                versions["esp-adf"] = os.getenv("ESP_ADF_VERSION", "")
+        else:
+            versions["esp-adf"] = os.getenv("ESP_ADF_VERSION", "")
+        report.extend([f"  {d}" for d in res.details])
+        report.append(("[OK] " if res.ok else "[FAIL] ") + res.summary)
+        if not res.ok:
+            failures += 1
 
     if "esp-sr" in used:
         sr_dir = resolve_repo(
